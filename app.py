@@ -110,37 +110,51 @@ def process_jhn(df_raw):
     return pd.DataFrame(output)
 
 def process_ug(df_raw):
-    """ENGINE UG Parser"""
+    """ENGINE UG Parser - Anti Leak Header & Anti Typo Tab"""
+    if df_raw is None or len(df_raw) <= 1:
+        raise ValueError("Data raw ENGINE UG tidak mencukupi.")
+
+    if len(df_raw.columns) < 8:
+        raise ValueError("Format tab tidak cocok untuk ENGINE UG (jumlah kolom kurang).")
+
     output = []
-    
+
     for i in range(1, len(df_raw)):
         row = df_raw.iloc[i]
 
         raw_h = str(row[7]) if len(row) > 7 and pd.notna(row[7]) else ""
         raw_f = str(row[5]) if len(row) > 5 and pd.notna(row[5]) else ""
         raw_g = str(row[6]) if len(row) > 6 and pd.notna(row[6]) else ""
-        
+
         created_at = raw_h.split('\n')[0].strip() if raw_h else ""
-        
+
         agent_match = re.search(r'\(([^)]+)\)', raw_f)
         by_agent = agent_match.group(1).strip().upper() if agent_match else raw_f.strip().upper()
-        
+
         user_match = re.search(r'\(([^)]+)\)', raw_g)
         username = user_match.group(1).strip().upper() if user_match else raw_g.strip().upper()
+
+        # 1. FILTER KETAT BARIS HEADER / TYPO TAB
+        # Jika nilai kolom terdeteksi berisi teks header, langsung skip
+        invalid_keywords = ["CREATED AT", "CREATED_AT", "BY AGENT", "LOGS / DETAIL", "LOGS/DETAIL", "IP ADDRESS", "USERNAME", "ACTION", "NAN", "NONE", ""]
         
+        if created_at.upper() in invalid_keywords or username.upper() in invalid_keywords or by_agent.upper() in invalid_keywords:
+            continue
+
+        # 2. VALIDASI TANGGAL (Harus diawali angka tahun/tanggal, bukan teks bebas)
+        if not re.match(r'^\d{2,4}', created_at):
+            continue
+
         sub_type = str(row[2]).strip().upper() if len(row) > 2 and pd.notna(row[2]) else ""
         action_val = str(row[3]).strip().upper() if len(row) > 3 and pd.notna(row[3]) else ""
         logs_detail = str(row[4]).strip() if len(row) > 4 and pd.notna(row[4]) else ""
-        
+
         ip_match = re.search(r'(?:[0-9]{1,3}\.){3}[0-9]{1,3}', raw_h)
         ip_address = ip_match.group(0) if ip_match else ""
 
-        if not created_at or created_at.upper() in ["CREATED AT", "CREATED_AT", "NAN", "NONE"]:
-            continue
-
         act_cat = action_val
         logs_lower = logs_detail.lower()
-        
+
         if sub_type == 'MEMBER BANK' and action_val == 'CREATE':
             act_cat = "ADD BANK ACCOUNT"
         elif (sub_type == 'MEMBER DETAILS' or 'account name update' in logs_lower) and action_val != 'DELETE':
@@ -170,10 +184,12 @@ def process_ug(df_raw):
             'IP ADDRESS': ip_address
         })
 
+    # Jika setelah difilter hasilnya kosong (karena typo tab), lemparkan error peringatan
     if not output:
         raise ValueError("Tidak ada data valid yang cocok untuk ENGINE UG.")
-
-    return pd.DataFrame(output)
+    
+    df_res = pd.DataFrame(output)
+    return df_res
 
 def process_zoom(df_raw, df_password=None):
     """ENGINE ZOOM Parser - Mengikuti Indeks Kolom Kaku Tab Utama vs Password"""
