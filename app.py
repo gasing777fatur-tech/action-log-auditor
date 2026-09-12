@@ -4,7 +4,11 @@ import pandas as pd
 import requests
 from io import StringIO
 
-st.set_page_config(page_title="Multi-Engine Action Log Auditor", layout="wide")
+st.set_page_config(
+    page_title="Action Log Auditor", 
+    page_icon="🛡️",                  
+    layout="wide"
+)
 st.title("🛡️ ACTION LOG AUDITOR")
 
 # ==============================================================================
